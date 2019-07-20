@@ -92,11 +92,11 @@ booster2sql <- function(xgbModel, print_progress=FALSE, unique_id=NULL,
       missing_dump_index <- which(branch_index==
                                     as.numeric(regmatches(local_dump[dump_index],regexec("missing=(.*?)$",local_dump[dump_index]))[[1]][2]))
 
-      cat("\n (CASE WHEN", paste0("[",cur_var_name,"] < ",cur_var_val), "THEN ")
+      cat("\n (CASE WHEN", paste0(cur_var_name," < ", fl(cur_var_val)), "THEN ")
       cat(fun_recurse_tree(g,local_dump,left_dump_index,branch_index))
-      cat("\n  WHEN ",paste0("[",cur_var_name,"] >= ",cur_var_val), "THEN ")
+      cat("\n  WHEN ",paste0(cur_var_name," >= ",fl(cur_var_val)), "THEN ")
       cat(fun_recurse_tree(g,local_dump,right_dump_index,branch_index))
-      cat("\n  WHEN ",paste0("[",cur_var_name,"] IS NULL"), "THEN ")
+      cat("\n  WHEN ",paste0(cur_var_name," IS NULL"), "THEN ")
       cat(fun_recurse_tree(g,local_dump,missing_dump_index,branch_index))
       cat(" END)")
     }
@@ -105,25 +105,25 @@ booster2sql <- function(xgbModel, print_progress=FALSE, unique_id=NULL,
   ###### generate tree ######
   sink(output_file_name, type ="output")
 
-  cat("SELECT ", unique_id, ", ")
+  cat("PROC SQL; CREATE TABLE XGB_SAS_OUPUT AS SELECT ", unique_id, ", ")
   if(xgbModel$params$objective == "binary:logistic" | xgbModel$params$objective == "reg:logistic" | xgbModel$params$objective == "binary:logitraw"){
     p0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
     b0 <- log(p0/(1-p0))
     if (xgbModel$params$objective == "binary:logitraw") {
-      cat(b0,"+ SUM(ONETREE) AS XGB_PRED")
+      cat(b0,"+ SUM(ONETREE) AS XGB_PRED format=best30.")
     } else {
-      cat("1/(1+exp(-(",b0,"+ SUM(ONETREE)))) AS XGB_PRED")
+      cat("1/(1+exp(-(",b0,"+ SUM(ONETREE)))) AS XGB_PRED format=best30.")
     }
   } else if (xgbModel$params$objective == "binary:hinge") {
     b0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
-    cat("IF((",b0,"+ SUM(ONETREE) )>0,1,0) AS XGB_PRED")
+    cat("IF((",b0,"+ SUM(ONETREE) )>0,1,0) AS XGB_PRED format=best30.")
   } else if(xgbModel$params$objective == "reg:linear"){
     b0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
-    cat(b0,"+ SUM(ONETREE) AS XGB_PRED")
+    cat(b0,"+ SUM(ONETREE) AS XGB_PRED format=best30.")
   } else if(xgbModel$params$objective == "reg:gamma" | xgbModel$params$objective == "count:poisson" | xgbModel$params$objective == "reg:tweedie"){
     mu0 <- ifelse(is.null(xgbModel$params$base_score),0.5,xgbModel$params$base_score)
     b0 <- log(mu0)
-    cat("exp(",b0,"+ SUM(ONETREE)) AS XGB_PRED")
+    cat("exp(",b0,"+ SUM(ONETREE)) AS XGB_PRED format=best30.")
   } else {
     warning("query is generated with unsupported objective")
   }
@@ -145,7 +145,7 @@ booster2sql <- function(xgbModel, print_progress=FALSE, unique_id=NULL,
     local_dump <- xgb_dump[tree_begin:tree_end]
 
     fun_recurse_tree(xgbModel,local_dump,1,branch_index)
-    cat(" AS ONETREE")
+    cat(" AS ONETREE format=best30.")
     if(tree_num != length(all_tree_index)){
       cat(" FROM ", input_table_name, "\n UNION ALL \n")
     }
